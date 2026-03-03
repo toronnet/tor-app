@@ -477,8 +477,8 @@ function update() {
     }
   }
 
-  // Fall death
-  if (player.y > H + 80) { die(); return; }
+  // Fall death — bypasses invincibility (beer can't save you from the void)
+  if (player.y > H + 80) { die(true); return; }
 
   // Timers
   if (player.invincible > 0) player.invincible--;
@@ -621,14 +621,17 @@ function update() {
   }
 }
 
-function die() {
-  if (player.invincible > 0) return;
+function die(force = false) {
+  if (!force && player.invincible > 0) return;
   player.lives--;
   spawnFX(player.x+player.w/2, player.y+player.h/2, '#FF2222', 16);
   if (player.lives <= 0) { gameState = 'gameover'; return; }
   player.x = levelData.startX; player.y = levelData.startY;
   player.vx = 0; player.vy = 0; player.invincible = 100;
   player.shielded = false; player.speedy = false; player.floating = false;
+  // Reset power-ups on death
+  player.beerActive = false; player.beerTimer = 0;
+  player.hasFireball = false; player.fireballTimer = 0;
 }
 
 // ---- POWERUP & FIREBALL DRAWING ----
@@ -954,9 +957,26 @@ function drawBG() {
       const sx = ((i*131+70)%LEVEL_WIDTH) - camera.x;
       if (sx > -2 && sx < W+2) ctx.fillRect(sx, (i*79+20)%(H*0.72), 2, 2);
     }
+    // Floating GetOnNet watermarks drifting across the background
+    const bgSlogans = ['getonnet.no','GON™','DIGITAL EXPERTS','15+ ÅR','500+ PROSJEKTER','VI KODER DRØMMER','APP • WEB • AI','ULEFOSS & SVERIGE','hei@getonnet.no','GON GON GON'];
+    ctx.save();
+    ctx.globalAlpha = 0.055;
+    ctx.fillStyle = '#4488FF';
+    for (let i = 0; i < 10; i++) {
+      const speed = 18 + (i*7)%14;
+      const bx = ((i*310 + Date.now()/speed) % (LEVEL_WIDTH+400)) - camera.x - 200;
+      const by2 = 60 + (i*61)%(H-120);
+      if (bx > -250 && bx < W+250) {
+        ctx.font = `bold ${14+(i%3)*6}px Courier New`;
+        ctx.textAlign = 'center';
+        ctx.fillText(bgSlogans[i % bgSlogans.length], bx, by2);
+      }
+    }
+    ctx.restore();
   }
 }
 
+const PLAT_BRANDS = ['getonnet.no','GON™','WE CODE','APP•WEB•AI','500+','15+ ÅR','GON','DIGITAL','KODER!','getonnet.no','NO BUGS*'];
 function drawPlatforms() {
   for (const p of platforms) {
     const sx = p.x - camera.x;
@@ -965,6 +985,13 @@ function drawPlatforms() {
     ctx.fillRect(sx, p.y, p.w, p.h);
     ctx.fillStyle = 'rgba(255,255,255,0.13)';
     ctx.fillRect(sx, p.y, p.w, 3);
+    // Brand every platform
+    if (p.w > 50) {
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.font = `bold ${p.w > 100 ? 8 : 7}px Courier New`;
+      ctx.textAlign = 'center';
+      ctx.fillText(PLAT_BRANDS[Math.floor(p.x/180) % PLAT_BRANDS.length], sx+p.w/2, p.y+10);
+    }
   }
 }
 
@@ -989,23 +1016,32 @@ function drawCoins() {
     if (sx < -20 || sx > W+20) continue;
     const by = c.y + Math.sin(c.bob)*3;
     ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 8;
-    ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(sx, by, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(sx, by, 8, 0, Math.PI*2); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#fffaaa'; ctx.beginPath(); ctx.arc(sx-1, by-2, 3, 0, Math.PI*2); ctx.fill();
+    // GetOnNet "G" branded coin
+    ctx.fillStyle = '#cc8800'; ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText('G', sx, by+3);
   }
 }
 
 function drawGoal() {
   const sx = goal.x - camera.x;
-  ctx.fillStyle = '#888'; ctx.fillRect(sx+17, goal.y-50, 4, 90);
-  ctx.fillStyle = '#FFD700';
-  ctx.beginPath(); ctx.moveTo(sx+21, goal.y-50); ctx.lineTo(sx+52, goal.y-32); ctx.lineTo(sx+21, goal.y-14); ctx.fill();
-  ctx.fillStyle = '#0a1628'; ctx.font = 'bold 7px Courier New'; ctx.textAlign = 'center';
-  ctx.fillText('GON', sx+35, goal.y-27);
-  ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 18;
-  ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 2;
-  ctx.strokeRect(sx+5, goal.y-60, 55, 90);
+  // Pole
+  ctx.fillStyle = '#aaaaaa'; ctx.fillRect(sx+19, goal.y-70, 5, 110);
+  // Flag — branded GetOnNet blue
+  ctx.fillStyle = '#1a3a8a';
+  ctx.beginPath(); ctx.moveTo(sx+24, goal.y-70); ctx.lineTo(sx+68, goal.y-50); ctx.lineTo(sx+24, goal.y-30); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 6px Courier New'; ctx.textAlign = 'center';
+  ctx.fillText('GetOn', sx+42, goal.y-55);
+  ctx.fillText('Net™', sx+42, goal.y-47);
+  // Glow
+  ctx.shadowColor = '#4488FF'; ctx.shadowBlur = 20;
+  ctx.strokeStyle = '#4488FF'; ctx.lineWidth = 2;
+  ctx.strokeRect(sx+8, goal.y-80, 70, 110);
   ctx.shadowBlur = 0;
+  // "FINISH" text
+  ctx.fillStyle = '#4488FF'; ctx.font = 'bold 10px Courier New';
+  ctx.fillText('getonnet.no', sx+43, goal.y+42);
 }
 
 function drawPlayer() {
@@ -1134,6 +1170,17 @@ function drawHUD() {
   ctx.fillStyle = '#ccc'; ctx.font = '8px Courier New'; ctx.textAlign = 'center';
   ctx.fillText('[E] ' + ch.abilityDesc, bx+bw/2, by-1);
 
+  // GetOnNet ticker at the very bottom
+  const tickerFull = '★ getonnet.no ★  Vi bidrar til resultater!  ●  500+ prosjekter levert  ●  15+ års erfaring  ●  App • Web • AI • Design  ●  Ring oss: +47 35 90 15 00  ●  hei@getonnet.no  ●  Ulefoss, Telemark og Sverige  ●  Nettside? Vi fikser det!  ●  Kåret til "Beste byrå" av oss selv™  ●  ISO-sertifisert*  (*ikke verifisert)  ●  Vi koder drømmene dine  ●  ';
+  const tickerSpeed = 40;
+  const tickerX = W - ((Date.now()/tickerSpeed) % (tickerFull.length * 7.2));
+  ctx.fillStyle = 'rgba(10,22,50,0.92)'; ctx.fillRect(0, H-18, W, 18);
+  ctx.fillStyle = '#4488FF'; ctx.font = '10px Courier New'; ctx.textAlign = 'left';
+  ctx.fillText(tickerFull + tickerFull, tickerX, H-4);
+  // Watermark corner
+  ctx.fillStyle = 'rgba(68,136,255,0.15)'; ctx.font = 'bold 11px Courier New'; ctx.textAlign = 'right';
+  ctx.fillText('Powered by GetOnNet™', W-6, H-22);
+
   // Fireball status
   if (player.hasFireball) {
     const secs = Math.ceil(player.fireballTimer/60);
@@ -1160,39 +1207,81 @@ function drawHUD() {
 // ---- SCREENS ----
 function drawMenu() {
   ctx.fillStyle = '#050e1d'; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  // Background stars
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
   for (let i = 0; i < 90; i++) ctx.fillRect((i*131+50)%W, (i*79+20)%H, 2, 2);
+  // Drifting "getonnet.no" in background
+  ctx.save(); ctx.globalAlpha = 0.04; ctx.fillStyle = '#4488FF'; ctx.font = 'bold 40px Courier New'; ctx.textAlign = 'center';
+  for (let i = 0; i < 6; i++) ctx.fillText('getonnet.no', ((i*180+Date.now()/25)%1100)-100, 80+(i*90));
+  ctx.restore();
 
-  ctx.shadowColor = '#4488FF'; ctx.shadowBlur = 40;
-  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 56px Courier New'; ctx.textAlign = 'center';
-  ctx.fillText('GetOnNet', W/2, 145);
+  // "OFFICIAL SPONSOR" badge top-left
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 9px Courier New'; ctx.textAlign = 'left';
+  ctx.fillText('★ OFFISIELL SPONSOR AV SEG SELV ★', 8, 18);
+
+  // "ISO certified" badge top-right (fake)
+  ctx.fillStyle = '#32CD32'; ctx.textAlign = 'right';
+  ctx.fillText('ISO 9001* SERTIFISERT', W-8, 18);
+  ctx.fillStyle = '#444'; ctx.font = '7px Courier New';
+  ctx.fillText('(*ikke verifisert)', W-8, 28);
+
+  // Main logo
+  ctx.shadowColor = '#4488FF'; ctx.shadowBlur = 50;
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 58px Courier New'; ctx.textAlign = 'center';
+  ctx.fillText('GetOnNet', W/2, 110);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#4488FF'; ctx.font = 'bold 28px Courier New';
-  ctx.fillText('Q U E S T', W/2, 188);
-  ctx.fillStyle = '#888'; ctx.font = '14px Courier New';
-  ctx.fillText('Adventure Platformer', W/2, 220);
+  ctx.fillStyle = '#4488FF'; ctx.font = 'bold 30px Courier New';
+  ctx.fillText('Q U E S T', W/2, 148);
+  // Subtitle
+  ctx.fillStyle = '#888'; ctx.font = '12px Courier New';
+  ctx.fillText('Et eventyrspill basert på en virkelig bedrift fra Ulefoss', W/2, 168);
 
-  ctx.fillStyle = '#1a3a7a'; ctx.fillRect(W/2-130, 265, 260, 54);
-  ctx.strokeStyle = '#4488FF'; ctx.lineWidth = 2; ctx.strokeRect(W/2-130, 265, 260, 54);
+  // Fake award badges
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 9px Courier New';
+  ctx.fillText('🏆 ÅRETS SPILL 2026*  ·  🎮 GAME OF THE CENTURY*  ·  🌟 5/5 STJERNER (internt)', W/2, 185);
+  ctx.fillStyle = '#444'; ctx.font = '7px Courier New';
+  ctx.fillText('*kåret av GetOnNet-teamet selv', W/2, 196);
+
+  // Play button
+  ctx.fillStyle = '#1a3a7a'; ctx.fillRect(W/2-140, 212, 280, 50);
+  ctx.strokeStyle = '#4488FF'; ctx.lineWidth = 2; ctx.strokeRect(W/2-140, 212, 280, 50);
   ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Courier New';
-  ctx.fillText('PRESS  ENTER', W/2, 300);
+  ctx.fillText('TRYKK ENTER FOR Å SPILLE', W/2, 243);
 
-  ctx.fillStyle = '#555'; ctx.font = '12px Courier New';
-  ctx.fillText('Arrow Keys / WASD  ·  Move', W/2, 360);
-  ctx.fillText('SPACE / UP  ·  Jump', W/2, 378);
-  ctx.fillText('[E] or SHIFT  ·  Special Ability', W/2, 396);
-  ctx.fillText('[Z] or [X]  ·  Shoot Fireball (grab fire flower first!)', W/2, 414);
-  ctx.fillText('Land on bugs to stomp  ·  Reach the flag to advance', W/2, 432);
-  ctx.fillStyle = '#FF4400'; ctx.font = '11px Courier New';
-  ctx.fillText('Power-ups: FIRE FLOWER = shoot fireballs  ·  BEER = rainbow invincibility!', W/2, 455);
+  // Controls
+  ctx.fillStyle = '#555'; ctx.font = '11px Courier New';
+  ctx.fillText('Piltaster / WASD = beveg  ·  SPACE = hopp  ·  [E] = spesialevne  ·  [Z] = ildkule', W/2, 282);
+  ctx.fillText('Hopp på bugs for å ta dem  ·  Nå flagget for å gå videre', W/2, 298);
+
+  // GetOnNet sales pitch
+  ctx.fillStyle = 'rgba(30,60,120,0.7)'; ctx.fillRect(30, 315, W-60, 98);
+  ctx.strokeStyle = '#4488FF'; ctx.lineWidth = 1; ctx.strokeRect(30, 315, W-60, 98);
+  ctx.fillStyle = '#4488FF'; ctx.font = 'bold 12px Courier New';
+  ctx.fillText('OM GETONNET AS', W/2, 333);
+  ctx.fillStyle = '#aaa'; ctx.font = '10px Courier New';
+  ctx.fillText('Vi er et fullservice digitalbyrå fra Ulefoss, Telemark!', W/2, 350);
+  ctx.fillText('App-utvikling  ·  Nettside  ·  AI-løsninger  ·  Design  ·  Annonsering', W/2, 366);
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 11px Courier New';
+  ctx.fillText('500+ prosjekter  ·  15+ års erfaring  ·  Kontor i Norge OG Sverige!', W/2, 382);
+  ctx.fillStyle = '#4488FF'; ctx.font = 'bold 12px Courier New';
+  ctx.fillText('getonnet.no  ·  hei@getonnet.no  ·  +47 35 90 15 00', W/2, 400);
+
+  // Scrolling ticker
+  const mt = '★ getonnet.no ★  Vi bidrar til resultater!  ●  Ring oss!  ●  +47 35 90 15 00  ●  hei@getonnet.no  ●  ';
+  const mx = W - ((Date.now()/35) % (mt.length * 7));
+  ctx.fillStyle = 'rgba(10,22,50,0.95)'; ctx.fillRect(0, H-18, W, 18);
+  ctx.fillStyle = '#4488FF'; ctx.font = '10px Courier New'; ctx.textAlign = 'left';
+  ctx.fillText(mt+mt, mx, H-4);
 }
 
 function drawSelect() {
   ctx.fillStyle = '#050e1d'; ctx.fillRect(0,0,W,H);
   ctx.fillStyle = '#fff'; ctx.font = 'bold 22px Courier New'; ctx.textAlign = 'center';
-  ctx.fillText('Choose Your Character', W/2, 32);
-  ctx.fillStyle = '#4488FF'; ctx.font = '12px Courier New';
-  ctx.fillText('Arrow keys to browse · ENTER to play', W/2, 52);
+  ctx.fillText('Velg din GetOnNet-helt!', W/2, 26);
+  ctx.fillStyle = '#4488FF'; ctx.font = '11px Courier New';
+  ctx.fillText('Alle karakterer er ekte ansatte hos GetOnNet AS, Ulefoss — getonnet.no', W/2, 42);
+  ctx.fillStyle = '#555'; ctx.font = '10px Courier New';
+  ctx.fillText('Piltaster for å bla · ENTER for å spille · (Ingen ansatte ble skadet under produksjonen)', W/2, 56);
 
   const cols = 3, cw = 245, ch2 = 132, pad = 8;
   const ox = (W - cols*cw - (cols-1)*pad) / 2;
@@ -1239,32 +1328,88 @@ function drawSelect() {
 }
 
 function drawGameOver() {
-  ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = 'rgba(0,0,0,0.88)'; ctx.fillRect(0,0,W,H);
   ctx.fillStyle = '#FF4444'; ctx.font = 'bold 58px Courier New'; ctx.textAlign = 'center';
-  ctx.fillText('GAME OVER', W/2, H/2-55);
-  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 22px Courier New';
-  ctx.fillText('Score: ' + score, W/2, H/2+5);
-  ctx.fillStyle = '#fff'; ctx.font = '15px Courier New';
-  ctx.fillText('ENTER — Try Again', W/2, H/2+55);
-  ctx.fillText('ESC — Character Select', W/2, H/2+82);
+  ctx.fillText('GAME OVER', W/2, 130);
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 20px Courier New';
+  ctx.fillText('Score: ' + score, W/2, 168);
+  // GetOnNet ad in game over screen
+  ctx.fillStyle = 'rgba(20,40,100,0.85)'; ctx.fillRect(80, 195, W-160, 120);
+  ctx.strokeStyle = '#4488FF'; ctx.lineWidth = 2; ctx.strokeRect(80, 195, W-160, 120);
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 13px Courier New';
+  ctx.fillText('💡 ER DU FRUSTRERT OVER BUGS?', W/2, 218);
+  ctx.fillStyle = '#fff'; ctx.font = '11px Courier New';
+  ctx.fillText('GetOnNet leverer robuste, bug-frie digitale løsninger!', W/2, 238);
+  ctx.fillText('(I hvert fall nesten. Vi er mennesker også.)', W/2, 254);
+  ctx.fillStyle = '#4488FF'; ctx.font = 'bold 12px Courier New';
+  ctx.fillText('getonnet.no  ·  hei@getonnet.no  ·  +47 35 90 15 00', W/2, 274);
+  ctx.fillStyle = '#aaa'; ctx.font = '9px Courier New';
+  ctx.fillText('GetOnNet AS tar ikke ansvar for tap av spillfremgang, liv, eller verdighet.', W/2, 294);
+  // Buttons
+  ctx.fillStyle = '#fff'; ctx.font = '14px Courier New';
+  ctx.fillText('ENTER — Prøv igjen  ·  ESC — Velg karakter', W/2, 345);
 }
 
 function drawWin() {
-  ctx.fillStyle = 'rgba(0,0,0,0.84)'; ctx.fillRect(0,0,W,H);
-  ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 40;
-  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 56px Courier New'; ctx.textAlign = 'center';
-  ctx.fillText('YOU WIN!', W/2, H/2-95);
+  ctx.fillStyle = 'rgba(0,0,0,0.88)'; ctx.fillRect(0,0,W,H);
+  // Rainbow border pulse
+  const hw = (Date.now()/20) % 360;
+  ctx.strokeStyle = `hsl(${hw},100%,60%)`; ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, W-6, H-6);
+
+  ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 50;
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 54px Courier New'; ctx.textAlign = 'center';
+  ctx.fillText('GETONNET VINNER!', W/2, 75);
   ctx.shadowBlur = 0;
+
   const ch = CHARS[player.charIdx];
-  ctx.fillStyle = ch.color; ctx.font = 'bold 22px Courier New';
-  ctx.fillText(ch.name + ' saves the day!', W/2, H/2-48);
-  ctx.fillStyle = '#fff'; ctx.font = '18px Courier New';
-  ctx.fillText('Score: ' + score, W/2, H/2+2);
-  ctx.fillText('Coins: ' + player.coins, W/2, H/2+30);
-  ctx.fillStyle = '#4488FF'; ctx.font = '14px Courier New';
-  ctx.fillText('getonnet.no', W/2, H/2+75);
-  ctx.fillStyle = '#888'; ctx.font = '14px Courier New';
-  ctx.fillText('ENTER — Play Again', W/2, H/2+120);
+  ctx.fillStyle = ch.color; ctx.font = 'bold 20px Courier New';
+  ctx.fillText(ch.name + ' redder den digitale verden! 🦸', W/2, 108);
+  ctx.fillStyle = '#fff'; ctx.font = '15px Courier New';
+  ctx.fillText('Score: ' + score + '   ·   GetOnNet-kreditter: ' + player.coins, W/2, 134);
+
+  // Huge GetOnNet ad block
+  ctx.fillStyle = 'rgba(10,30,80,0.92)'; ctx.fillRect(30, 150, W-60, 270);
+  ctx.strokeStyle = '#4488FF'; ctx.lineWidth = 2; ctx.strokeRect(30, 150, W-60, 270);
+
+  ctx.shadowColor = '#4488FF'; ctx.shadowBlur = 15;
+  ctx.fillStyle = '#4488FF'; ctx.font = 'bold 22px Courier New';
+  ctx.fillText('GetOnNet AS', W/2, 180);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#888'; ctx.font = '10px Courier New';
+  ctx.fillText('Ulefoss, Telemark  ·  Sverige', W/2, 196);
+
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 12px Courier New';
+  ctx.fillText('🏆 Har du et digitalt prosjekt? VI FIKSER DET! 🏆', W/2, 222);
+
+  ctx.fillStyle = '#ccc'; ctx.font = '11px Courier New';
+  ctx.fillText('App-utvikling  ·  Nettside  ·  AI-løsninger', W/2, 244);
+  ctx.fillText('UI/UX Design  ·  E-handel  ·  Digital annonsering', W/2, 260);
+
+  ctx.fillStyle = '#FFD700'; ctx.font = 'bold 13px Courier New';
+  ctx.fillText('🎉 VINNERTILBUD: 0% rabatt (vi er ikke desperate) 🎉', W/2, 285);
+
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Courier New';
+  ctx.fillText('getonnet.no', W/2, 310);
+  ctx.fillStyle = '#888'; ctx.font = '11px Courier New';
+  ctx.fillText('hei@getonnet.no  ·  +47 35 90 15 00', W/2, 328);
+
+  ctx.fillStyle = '#555'; ctx.font = '9px Courier New';
+  ctx.fillText('"Vi er ikke ansvarlig for avhengighet til dette spillet — kontakt oss for rehab-app!"', W/2, 354);
+  ctx.fillText('GetOnNet AS © 2026  ·  Alle rettigheter forbeholdt  ·  Inkl. retten til å brande alt', W/2, 368);
+  ctx.fillText('ISO-sertifisert* · Bærekraftig koding** · 100% menneskelig laget***', W/2, 382);
+  ctx.fillStyle = '#333'; ctx.font = '8px Courier New';
+  ctx.fillText('(*nei) (**nesten) (***med litt Claude-hjelp)', W/2, 394);
+
+  ctx.fillStyle = '#4488FF'; ctx.font = 'bold 13px Courier New';
+  ctx.fillText('ENTER — Spill igjen (vi vet du vil)', W/2, 422);
+
+  // Ticker
+  const wt = '★ TAKK FOR AT DU SPILTE GETONNET QUEST ★  Besøk getonnet.no  ●  Ring +47 35 90 15 00  ●  ';
+  const wx = W - ((Date.now()/28) % (wt.length * 7));
+  ctx.fillStyle = 'rgba(10,22,50,0.95)'; ctx.fillRect(0, H-18, W, 18);
+  ctx.fillStyle = '#4488FF'; ctx.font = '10px Courier New'; ctx.textAlign = 'left';
+  ctx.fillText(wt+wt, wx, H-4);
 }
 
 // ---- INPUT HANDLING PER STATE ----
